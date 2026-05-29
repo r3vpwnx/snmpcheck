@@ -1,7 +1,7 @@
 # snmpcheck
 
 ## Overview
-`snmpcheck.pl` is a full-featured SNMP enumeration tool written in Perl, designed for penetration testers and security professionals. It automates the process of extracting detailed information from any SNMP-enabled device — routers, switches, servers, printers, firewalls — and presents the output in a clean, structured, human-readable format.
+`snmpcheck.pl` is a full-featured SNMP enumeration tool written in Perl, designed for penetration testers and security professionals. It automates the process of extracting detailed information from any SNMP-enabled device - routers, switches, servers, printers, firewalls — and presents the output in a clean, structured, human-readable format.
 This is a faithful Perl port of the original `snmpcheck.rb` Ruby tool, rewritten to use Net::SNMP — which provides deterministic OID index handling that resolves walk alignment issues present in some Python SNMP libraries.
 
 ## Features
