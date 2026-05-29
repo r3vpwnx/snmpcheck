@@ -19,6 +19,37 @@ cpan Net::SNMP
 perl --version
 ```
 
+<img width="1396" height="616" alt="image" src="https://github.com/user-attachments/assets/a80d26d5-ace8-4b71-80db-20c7dcbbc2e5" />
+
+### Examples
+```
+# Basic enumeration with known community
+./snmpcheck.pl -c public 192.168.70.150
+
+# SNMPv2c (faster, supports bulk operations)
+./snmpcheck.pl -c public -v 2c 192.168.70.150
+
+# Test write access
+./snmpcheck.pl -c public -w 192.168.70.150
+
+# Skip TCP enumeration (faster, less noisy)
+./snmpcheck.pl -c public -d 192.168.70.150
+
+# Slow/unreliable target — increase timeout and retries
+./snmpcheck.pl -c public -t 10 -r 3 192.168.70.150
+
+# Full scan with write check, SNMPv2c, no TCP
+./snmpcheck.pl -c public -v 2c -w -d -t 10 192.168.70.150
+
+# Save output to file
+./snmpcheck.pl -c public 192.168.70.150 | tee results.txt
+
+# Community string brute force (wrap in shell)
+for comm in public private manager admin monitor cisco; do
+    ./snmpcheck.pl -c "$comm" -t 2 -d 192.168.70.150 2>/dev/null \
+      | grep -q "Hostname" && echo "[HIT] $comm"
+done
+```
 
 ### Disclaimer
 This tool is intended for authorized penetration testing and security assessments only. Use only against systems you have explicit written permission to test. The developer assumes no liability for misuse.
