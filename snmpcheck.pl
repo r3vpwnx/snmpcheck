@@ -1,20 +1,49 @@
 #!/usr/bin/env perl
+# =============================================================================
+#  snmpcheck.pl v1.0 - SNMP Enumerator (Perl Edition)
+# =============================================================================
 #
-# snmpcheck.pl v1.0 - SNMP enumerator
-# Perl port of snmpcheck.rb by Matteo Cantoni (www.nothink.org)
-# - r3vpwnx
-# deps: cpan Net::SNMP   OR   apt install libnet-snmp-perl
+#  Developer  : r3vpwnx - Dilanka Kaushal Hewage
+#               Application Security Engineer | Red Teamer | CTF Player
+#               https://github.com/r3vpwnx
 #
-# Usage: perl snmpcheck.pl [OPTIONS] <target IP>
-#   -p <port>       SNMP port         (default: 161)
-#   -c <community>  Community string  (default: public)
-#   -v <1|2c>       SNMP version      (default: 1)
-#   -w              Check write access
-#   -d              Disable TCP enumeration
-#   -t <sec>        Timeout           (default: 5)
-#   -r <n>          Retries           (default: 1)
-#   -h              Help
+#  Based on   : snmpcheck.rb v1.9 by Matteo Cantoni (www.nothink.org)
+#               Original Ruby tool: https://www.nothink.org
 #
+#  License    : GNU General Public License v3.0
+#               https://www.gnu.org/licenses/gpl-3.0.html
+#
+#  Purpose    : Full-featured SNMP enumeration tool for penetration testing
+#               and network security assessments. Produces structured,
+#               human-readable output covering system info, interfaces,
+#               routing tables, TCP/UDP sockets, running processes, storage,
+#               installed software, and Windows-specific MIB data.
+#
+# -----------------------------------------------------------------------------
+#  DEPENDENCIES
+#    apt install libnet-snmp-perl       (Debian/Ubuntu/Parrot/Kali)
+#    cpan Net::SNMP                     (generic Perl env)
+#
+#  USAGE
+#    chmod +x snmpcheck.pl
+#    ./snmpcheck.pl [OPTIONS] <target IP>
+#
+#  OPTIONS
+#    -p <port>        SNMP port              (default: 161)
+#    -c <community>   Community string       (default: public)
+#    -v <1|2c>        SNMP version           (default: 1)
+#    -w               Test write access
+#    -d               Disable TCP enumeration
+#    -t <seconds>     Timeout                (default: 5)
+#    -r <n>           Retries                (default: 1)
+#    -h               Help
+#
+#  EXAMPLES
+#    ./snmpcheck.pl -c public 10.10.10.5
+#    ./snmpcheck.pl -c private -v 2c -w 10.10.10.5
+#    ./snmpcheck.pl -c community -d -t 10 -r 3 10.10.10.5
+# =============================================================================
+
 
 use strict;
 use warnings;
@@ -31,26 +60,38 @@ my $CW        = 22;   # table cell width
 # ── output helpers ────────────────────────────────────────────────────────────
 
 sub banner {
-    print "snmpcheck.pl $VERSION  -  SNMP enumerator (Net::SNMP edition)\n";
-    print "Perl port of snmpcheck.rb by Matteo Cantoni\n\n";
+    print "snmpcheck.pl $VERSION  -  SNMP enumerator (Net::SNMP edition)
+";
+    print "Perl port of snmpcheck.rb by Matteo Cantoni
+
+";
 }
 
-sub info    { print "[+] $_[0]\n" }
-sub err     { print STDERR "[!] $_[0]\n" }
-sub section { print "\n[*] $_[0]:\n\n" }
+sub info    { print "[+] $_[0]
+" }
+sub err     { print STDERR "[!] $_[0]
+" }
+sub section { print "
+[*] $_[0]:
+
+" }
 
 sub kv {
     my ($k, $v) = @_;
-    printf "  %-${KW}s: %s\n", $k, $v // '-';
+    printf "  %-${KW}s: %s
+", $k, $v // '-';
 }
 
 sub print_table {
     my ($headers, $rows) = @_;
     my $sp = '  ';
-    print $sp . join('', map { sprintf "%-${CW}s", $_ } @$headers) . "\n";
-    print $sp . '-' x ($CW * scalar @$headers) . "\n";
+    print $sp . join('', map { sprintf "%-${CW}s", $_ } @$headers) . "
+";
+    print $sp . '-' x ($CW * scalar @$headers) . "
+";
     for my $row (@$rows) {
-        print $sp . join('', map { sprintf "%-${CW}s", $_ // '-' } @$row) . "\n";
+        print $sp . join('', map { sprintf "%-${CW}s", $_ // '-' } @$row) . "
+";
     }
 }
 
@@ -511,7 +552,8 @@ banner();
 info("Connecting to $target:$opt_port  SNMPv$opt_version  community='$opt_community'");
 info("Write-access check enabled")  if $opt_write;
 info("TCP enumeration disabled")    if $opt_notcp;
-print "\n";
+print "
+";
 
 # build session
 my ($sess, $serr) = Net::SNMP->session(
@@ -532,7 +574,9 @@ unless (defined $sess) {
 my %sys = enum_system($sess);
 my @SYS_ORDER = ('Hostname','Description','Contact','Location','Uptime snmp','Uptime system');
 
-print "[*] System information:\n\n";
+print "[*] System information:
+
+";
 kv($_, $sys{$_}) for @SYS_ORDER;
 
 my $is_win = ($sys{Description}//'') =~ /Windows/i;
@@ -542,9 +586,11 @@ if ($opt_write) {
     section("Write access check");
     my $hostname = $sys{Hostname} // 'snmpcheck';
     if (check_write_access($sess, $hostname)) {
-        print "  [!] Write access PERMITTED\n";
+        print "  [!] Write access PERMITTED
+";
     } else {
-        print "  Write access not permitted\n";
+        print "  Write access not permitted
+";
     }
 }
 
@@ -558,7 +604,8 @@ if ($is_win) {
     my @users = enum_win_users($sess);
     if (@users) {
         section("User accounts");
-        print "  $_\n" for sort @users;
+        print "  $_
+" for sort @users;
     }
 }
 
@@ -577,7 +624,8 @@ if (@ifaces) {
         for my $k (qw(Interface Id MAC Type Speed MTU), 'In octets', 'Out octets') {
             kv($k, $iface->{$k});
         }
-        print "\n";
+        print "
+";
     }
 }
 
@@ -623,7 +671,8 @@ if ($is_win) {
         section("Shares");
         for my $s (@shares) {
             kv($_, $s->{$_}) for qw(Name Path Comment);
-            print "\n";
+            print "
+";
         }
     }
     my %iis = enum_win_iis($sess);
@@ -642,7 +691,8 @@ if (@storage) {
                    'Memory size','Memory used') {
             kv($k, $s->{$k});
         }
-        print "\n";
+        print "
+";
     }
 }
 
@@ -675,4 +725,5 @@ if (@$sw) {
 }
 
 $sess->close();
-print "\n";
+print "
+";
