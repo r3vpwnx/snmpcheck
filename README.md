@@ -21,6 +21,11 @@ perl --version
 
 <img width="1396" height="616" alt="image" src="https://github.com/user-attachments/assets/a80d26d5-ace8-4b71-80db-20c7dcbbc2e5" />
 
+<img width="1930" height="1186" alt="image" src="https://github.com/user-attachments/assets/01bb1cf1-4c82-4218-9440-19376ec4f633" />
+
+<img width="1388" height="368" alt="image" src="https://github.com/user-attachments/assets/de5fffba-2fd8-400b-8607-6fb548aec920" />
+
+
 ### Examples
 ```
 # Basic enumeration with known community
