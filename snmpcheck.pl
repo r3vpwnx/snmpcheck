@@ -19,6 +19,7 @@
 #               routing tables, TCP/UDP sockets, running processes, storage,
 #               installed software, and Windows-specific MIB data.
 #
+#
 # -----------------------------------------------------------------------------
 #  DEPENDENCIES
 #    apt install libnet-snmp-perl       (Debian/Ubuntu/Parrot/Kali)
@@ -39,9 +40,9 @@
 #    -h               Help
 #
 #  EXAMPLES
-#    ./snmpcheck.pl -c public 10.10.10.5
-#    ./snmpcheck.pl -c private -v 2c -w 10.10.10.5
-#    ./snmpcheck.pl -c community -d -t 10 -r 3 10.10.10.5
+#    ./snmpcheck.pl -c public 192.168.70.150
+#    ./snmpcheck.pl -c private -v 2c -w 192.168.70.150
+#    ./snmpcheck.pl -c community -d -t 10 -r 3 192.168.70.150
 # =============================================================================
 
 
@@ -54,44 +55,32 @@ use Socket qw(inet_aton);
 # ── constants ─────────────────────────────────────────────────────────────────
 
 my $VERSION   = 'v1.0';
-my $KW        = 30;   # key column width
-my $CW        = 22;   # table cell width
+my $KW        = 30;
+my $CW        = 22;
 
 # ── output helpers ────────────────────────────────────────────────────────────
 
 sub banner {
-    print "snmpcheck.pl $VERSION  -  SNMP enumerator (Net::SNMP edition)
-";
-    print "Perl port of snmpcheck.rb by Matteo Cantoni
-
-";
+    print "snmpcheck.pl $VERSION  -  SNMP enumerator (Net::SNMP edition)\n";
+    print "Perl port of snmpcheck.rb by Matteo Cantoni\n\n";
 }
 
-sub info    { print "[+] $_[0]
-" }
-sub err     { print STDERR "[!] $_[0]
-" }
-sub section { print "
-[*] $_[0]:
-
-" }
+sub info    { print "[+] $_[0]\n" }
+sub err     { print STDERR "[!] $_[0]\n" }
+sub section { print "\n[*] $_[0]:\n\n" }
 
 sub kv {
     my ($k, $v) = @_;
-    printf "  %-${KW}s: %s
-", $k, $v // '-';
+    printf "  %-${KW}s: %s\n", $k, $v // '-';
 }
 
 sub print_table {
     my ($headers, $rows) = @_;
     my $sp = '  ';
-    print $sp . join('', map { sprintf "%-${CW}s", $_ } @$headers) . "
-";
-    print $sp . '-' x ($CW * scalar @$headers) . "
-";
+    print $sp . join('', map { sprintf "%-${CW}s", $_ } @$headers) . "\n";
+    print $sp . '-' x ($CW * scalar @$headers) . "\n";
     for my $row (@$rows) {
-        print $sp . join('', map { sprintf "%-${CW}s", $_ // '-' } @$row) . "
-";
+        print $sp . join('', map { sprintf "%-${CW}s", $_ // '-' } @$row) . "\n";
     }
 }
 
@@ -118,14 +107,6 @@ sub fmt_mac {
 }
 
 # ── Net::SNMP wrappers ────────────────────────────────────────────────────────
-#
-# Net::SNMP get_table() returns a flat hashref:
-#   { '1.3.6.1.2.1.2.2.1.2.1' => 'eth0',
-#     '1.3.6.1.2.1.2.2.1.2.2' => 'lo', ... }
-#
-# The instance suffix is simply: full_oid stripped of base_oid + '.'
-# This is deterministic — no ezsnmp layout ambiguity.
-# ─────────────────────────────────────────────────────────────────────────────
 
 sub snmp_get {
     my ($sess, $oid) = @_;
@@ -138,7 +119,6 @@ sub snmp_get {
     return $v eq '' ? undef : $v;
 }
 
-# Walk one column OID → { suffix => value }
 sub walk_col {
     my ($sess, $base) = @_;
     my $res = $sess->get_table(-baseoid => $base);
@@ -156,7 +136,6 @@ sub walk_col {
     return \%out;
 }
 
-# Walk N column OIDs in parallel → [ [row values...], ... ] ordered by suffix
 sub walk_cols {
     my ($sess, @oids) = @_;
     my @cols = map { walk_col($sess, $_) } @oids;
@@ -248,11 +227,34 @@ sub enum_system {
 }
 
 sub check_write_access {
-    my ($sess, $hostname) = @_;
-    my $res = $sess->set_request(
-        -varbindlist => ['1.3.6.1.2.1.1.5.0', OCTET_STRING, $hostname]
+    my ($sess) = @_;
+    my $oid    = '1.3.6.1.2.1.1.5.0';
+    my $marker = 'hacked';
+
+    my $original = snmp_get($sess, $oid) // '';
+
+    my $set_res = $sess->set_request(
+        -varbindlist => [$oid, OCTET_STRING, $marker]
     );
-    return defined $res;
+    unless (defined $set_res) {
+        return { permitted => 0, original => $original,
+                 readback => undef, restored => 0 };
+    }
+
+    my $readback  = snmp_get($sess, $oid) // '';
+    my $confirmed = ($readback eq $marker);
+
+    my $restore  = $sess->set_request(
+        -varbindlist => [$oid, OCTET_STRING, $original]
+    );
+    my $restored = defined $restore ? 1 : 0;
+
+    return {
+        permitted => $confirmed,
+        original  => $original,
+        readback  => $readback,
+        restored  => $restored,
+    };
 }
 
 sub enum_network_info {
@@ -280,15 +282,15 @@ sub enum_network_info {
 sub enum_interfaces {
     my $sess = shift;
     my $rows = walk_cols($sess,
-        '1.3.6.1.2.1.2.2.1.1',   # ifIndex
-        '1.3.6.1.2.1.2.2.1.2',   # ifDescr
-        '1.3.6.1.2.1.2.2.1.6',   # ifPhysAddress
-        '1.3.6.1.2.1.2.2.1.3',   # ifType
-        '1.3.6.1.2.1.2.2.1.4',   # ifMtu
-        '1.3.6.1.2.1.2.2.1.5',   # ifSpeed
-        '1.3.6.1.2.1.2.2.1.10',  # ifInOctets
-        '1.3.6.1.2.1.2.2.1.16',  # ifOutOctets
-        '1.3.6.1.2.1.2.2.1.7',   # ifOperStatus
+        '1.3.6.1.2.1.2.2.1.1',
+        '1.3.6.1.2.1.2.2.1.2',
+        '1.3.6.1.2.1.2.2.1.6',
+        '1.3.6.1.2.1.2.2.1.3',
+        '1.3.6.1.2.1.2.2.1.4',
+        '1.3.6.1.2.1.2.2.1.5',
+        '1.3.6.1.2.1.2.2.1.10',
+        '1.3.6.1.2.1.2.2.1.16',
+        '1.3.6.1.2.1.2.2.1.7',
     );
     my @ifaces;
     for my $r (@$rows) {
@@ -313,31 +315,31 @@ sub enum_interfaces {
 sub enum_ip {
     my $sess = shift;
     return walk_cols($sess,
-        '1.3.6.1.2.1.4.20.1.2',  # ifIndex
-        '1.3.6.1.2.1.4.20.1.1',  # ipAddr
-        '1.3.6.1.2.1.4.20.1.3',  # netmask
-        '1.3.6.1.2.1.4.20.1.4',  # broadcast
+        '1.3.6.1.2.1.4.20.1.2',
+        '1.3.6.1.2.1.4.20.1.1',
+        '1.3.6.1.2.1.4.20.1.3',
+        '1.3.6.1.2.1.4.20.1.4',
     );
 }
 
 sub enum_routing {
     my $sess = shift;
     return walk_cols($sess,
-        '1.3.6.1.2.1.4.21.1.1',  # dest
-        '1.3.6.1.2.1.4.21.1.7',  # nexthop
-        '1.3.6.1.2.1.4.21.1.11', # mask
-        '1.3.6.1.2.1.4.21.1.3',  # metric
+        '1.3.6.1.2.1.4.21.1.1',
+        '1.3.6.1.2.1.4.21.1.7',
+        '1.3.6.1.2.1.4.21.1.11',
+        '1.3.6.1.2.1.4.21.1.3',
     );
 }
 
 sub enum_tcp {
     my $sess = shift;
     my $rows = walk_cols($sess,
-        '1.3.6.1.2.1.6.13.1.2',  # local addr
-        '1.3.6.1.2.1.6.13.1.3',  # local port
-        '1.3.6.1.2.1.6.13.1.4',  # remote addr
-        '1.3.6.1.2.1.6.13.1.5',  # remote port
-        '1.3.6.1.2.1.6.13.1.1',  # state
+        '1.3.6.1.2.1.6.13.1.2',
+        '1.3.6.1.2.1.6.13.1.3',
+        '1.3.6.1.2.1.6.13.1.4',
+        '1.3.6.1.2.1.6.13.1.5',
+        '1.3.6.1.2.1.6.13.1.1',
     );
     for my $r (@$rows) {
         $r->[4] = $TCP_STATE{$r->[4]//''}  // 'unknown';
@@ -348,20 +350,20 @@ sub enum_tcp {
 sub enum_udp {
     my $sess = shift;
     return walk_cols($sess,
-        '1.3.6.1.2.1.7.5.1.1',  # local addr
-        '1.3.6.1.2.1.7.5.1.2',  # local port
+        '1.3.6.1.2.1.7.5.1.1',
+        '1.3.6.1.2.1.7.5.1.2',
     );
 }
 
 sub enum_storage {
     my $sess = shift;
     my $rows = walk_cols($sess,
-        '1.3.6.1.2.1.25.2.3.1.1',  # index
-        '1.3.6.1.2.1.25.2.3.1.2',  # type OID
-        '1.3.6.1.2.1.25.2.3.1.3',  # description
-        '1.3.6.1.2.1.25.2.3.1.4',  # alloc unit
-        '1.3.6.1.2.1.25.2.3.1.5',  # size
-        '1.3.6.1.2.1.25.2.3.1.6',  # used
+        '1.3.6.1.2.1.25.2.3.1.1',
+        '1.3.6.1.2.1.25.2.3.1.2',
+        '1.3.6.1.2.1.25.2.3.1.3',
+        '1.3.6.1.2.1.25.2.3.1.4',
+        '1.3.6.1.2.1.25.2.3.1.5',
+        '1.3.6.1.2.1.25.2.3.1.6',
     );
     my @out;
     for my $r (@$rows) {
@@ -401,10 +403,10 @@ sub enum_filesystem {
 sub enum_devices {
     my $sess = shift;
     my $rows = walk_cols($sess,
-        '1.3.6.1.2.1.25.3.2.1.1',  # index
-        '1.3.6.1.2.1.25.3.2.1.2',  # type OID
-        '1.3.6.1.2.1.25.3.2.1.5',  # status
-        '1.3.6.1.2.1.25.3.2.1.3',  # descr
+        '1.3.6.1.2.1.25.3.2.1.1',
+        '1.3.6.1.2.1.25.3.2.1.2',
+        '1.3.6.1.2.1.25.3.2.1.5',
+        '1.3.6.1.2.1.25.3.2.1.3',
     );
     for my $r (@$rows) {
         $r->[1] = $DEV_TYPE{$r->[1]//''}   // 'unknown';
@@ -416,11 +418,11 @@ sub enum_devices {
 sub enum_processes {
     my $sess = shift;
     my $rows = walk_cols($sess,
-        '1.3.6.1.2.1.25.4.2.1.1',  # pid
-        '1.3.6.1.2.1.25.4.2.1.2',  # name
-        '1.3.6.1.2.1.25.4.2.1.4',  # path
-        '1.3.6.1.2.1.25.4.2.1.5',  # params
-        '1.3.6.1.2.1.25.4.2.1.7',  # status
+        '1.3.6.1.2.1.25.4.2.1.1',
+        '1.3.6.1.2.1.25.4.2.1.2',
+        '1.3.6.1.2.1.25.4.2.1.4',
+        '1.3.6.1.2.1.25.4.2.1.5',
+        '1.3.6.1.2.1.25.4.2.1.7',
     );
     for my $r (@$rows) {
         $r->[4] = {1=>'running',2=>'runnable'}->{$r->[4]//''}  // 'unknown';
@@ -431,8 +433,8 @@ sub enum_processes {
 sub enum_software {
     my $sess = shift;
     return walk_cols($sess,
-        '1.3.6.1.2.1.25.6.3.1.1',  # index
-        '1.3.6.1.2.1.25.6.3.1.2',  # name
+        '1.3.6.1.2.1.25.6.3.1.1',
+        '1.3.6.1.2.1.25.6.3.1.2',
     );
 }
 
@@ -529,7 +531,6 @@ USAGE
 
 my $target = shift @ARGV;
 
-# validate IP
 unless (defined inet_aton($target)) {
     err("Invalid IP address: $target");
     exit 1;
@@ -548,14 +549,13 @@ unless ($opt_version =~ /^(1|2c)$/) {
     err("Invalid SNMP version. Use 1 or 2c"); exit 1;
 }
 
-banner();
-info("Connecting to $target:$opt_port  SNMPv$opt_version  community='$opt_community'");
-info("Write-access check enabled")  if $opt_write;
-info("TCP enumeration disabled")    if $opt_notcp;
-print "
-";
+banner() unless $opt_write;
+unless ($opt_write) {
+    info("Connecting to $target:$opt_port  SNMPv$opt_version  community='$opt_community'");
+    info("TCP enumeration disabled") if $opt_notcp;
+    print "\n";
+}
 
-# build session
 my ($sess, $serr) = Net::SNMP->session(
     -hostname  => $target,
     -port      => $opt_port,
@@ -563,36 +563,36 @@ my ($sess, $serr) = Net::SNMP->session(
     -version   => $opt_version,
     -timeout   => $opt_timeout,
     -retries   => $opt_retries,
-    -translate => [-timeticks => 0],  # keep raw timeticks as string
+    -translate => [-timeticks => 0],
 );
 unless (defined $sess) {
     err("Session error: $serr");
     exit 1;
 }
 
+# ── Write-only mode ───────────────────────────────────────────────────────────
+if ($opt_write) {
+    print "\n[*] Write access check:\n\n";
+    my $result = check_write_access($sess);
+    if ($result->{permitted}) {
+        print " [!] WRITE ACCESS PERMITTED\n";
+        print " Community : $opt_community\n\n";
+    } else {
+        print " [-] Write access NOT permitted\n";
+        print " Community : $opt_community\n\n";
+    }
+    $sess->close();
+    exit 0;
+}
+
 # ── System ────────────────────────────────────────────────────────────────────
 my %sys = enum_system($sess);
 my @SYS_ORDER = ('Hostname','Description','Contact','Location','Uptime snmp','Uptime system');
 
-print "[*] System information:
-
-";
+print "[*] System information:\n\n";
 kv($_, $sys{$_}) for @SYS_ORDER;
 
 my $is_win = ($sys{Description}//'') =~ /Windows/i;
-
-# ── Write check ───────────────────────────────────────────────────────────────
-if ($opt_write) {
-    section("Write access check");
-    my $hostname = $sys{Hostname} // 'snmpcheck';
-    if (check_write_access($sess, $hostname)) {
-        print "  [!] Write access PERMITTED
-";
-    } else {
-        print "  Write access not permitted
-";
-    }
-}
 
 # ── Windows: domain + users ───────────────────────────────────────────────────
 if ($is_win) {
@@ -604,8 +604,7 @@ if ($is_win) {
     my @users = enum_win_users($sess);
     if (@users) {
         section("User accounts");
-        print "  $_
-" for sort @users;
+        print "  $_\n" for sort @users;
     }
 }
 
@@ -624,8 +623,7 @@ if (@ifaces) {
         for my $k (qw(Interface Id MAC Type Speed MTU), 'In octets', 'Out octets') {
             kv($k, $iface->{$k});
         }
-        print "
-";
+        print "\n";
     }
 }
 
@@ -671,8 +669,7 @@ if ($is_win) {
         section("Shares");
         for my $s (@shares) {
             kv($_, $s->{$_}) for qw(Name Path Comment);
-            print "
-";
+            print "\n";
         }
     }
     my %iis = enum_win_iis($sess);
@@ -691,8 +688,7 @@ if (@storage) {
                    'Memory size','Memory used') {
             kv($k, $s->{$k});
         }
-        print "
-";
+        print "\n";
     }
 }
 
@@ -725,5 +721,4 @@ if (@$sw) {
 }
 
 $sess->close();
-print "
-";
+print "\n";
