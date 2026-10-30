@@ -1,63 +1,85 @@
-# snmpcheck
+# snmpcheck (Perl)
 
-## Overview
-`snmpcheck.pl` is a full-featured SNMP enumeration tool written in Perl, designed for penetration testers and security professionals. It automates the process of extracting detailed information from any SNMP-enabled device - routers, switches, servers, printers, firewalls — and presents the output in a clean, structured, human-readable format.
-This is a faithful Perl port of the original `snmpcheck.rb` Ruby tool, rewritten to use Net::SNMP — which provides deterministic OID index handling that resolves walk alignment issues present in some Python SNMP libraries.
+An SNMP enumeration tool written in Perl using `Net::SNMP`. It queries an
+SNMP-enabled device and extracts system, network, storage, process and software
+information in a readable report, and can test for SNMP write access.
+
+This is a Perl port of **snmpcheck.rb by Matteo Cantoni**
+(http://www.nothink.org/). All credit for the original tool and its OID coverage
+belongs to the upstream author; this port reimplements that functionality on the
+`Net::SNMP` backend.
+
+## What this port adds
+
+- `Net::SNMP`-based implementation (no external `snmpget`/`snmpwalk` binaries required)
+- Deterministic handling of table/OID indexes
+- An explicit SNMP write-access test (`-w`)
+- Tunable timeout and retries
 
 ## Features
-CategoryData ExtractedSystemHostname, OS description, contact, location, uptimeNetwork InfoIP forwarding, TTL, TCP/UDP datagram countersInterfacesName, MAC, type, speed, MTU, in/out octets, statusIP AddressesInterface-to-IP mapping, netmask, broadcastRouting TableDestination, next-hop, mask, metricTCP SocketsLocal/remote addr:port, connection stateUDP SocketsListening local address and portStorageDevice type, size, used, allocation unitFilesystemMount point, type, access, bootable flagDevicesHardware device index, type, status, descriptionProcessesPID, name, path, parameters, run statusSoftwareInstalled package list with versionsWindowsDomain, user accounts, services, shares, IIS statsWrite AccessTests SNMP SET capability against community string
+
+| Category | Data extracted |
+|----------|----------------|
+| System | Hostname, description, uptime, contact, location |
+| Interfaces | Interface list, status, addresses |
+| Routing | Routing table entries |
+| Network sockets | Listening TCP and UDP ports |
+| Storage | Mounted storage and disk usage |
+| Processes | Running processes |
+| Software | Installed software |
+| Windows | Windows-specific data where exposed via SNMP |
 
 ## Requirements
+
+- Perl 5
+- `Net::SNMP` (`cpan install Net::SNMP`, or `apt install libnet-snmp-perl`)
+
+## Install
+
 ```
-# Debian / Ubuntu / Parrot / Kali
-sudo apt install libnet-snmp-perl
-
-# Or via CPAN (any platform)
-cpan Net::SNMP
-
-# Perl >= 5.10 required (5.38 tested)
-perl --version
-```
-
-<img width="1396" height="616" alt="image" src="https://github.com/user-attachments/assets/a80d26d5-ace8-4b71-80db-20c7dcbbc2e5" />
-
-<img width="1930" height="1186" alt="image" src="https://github.com/user-attachments/assets/01bb1cf1-4c82-4218-9440-19376ec4f633" />
-
-<img width="1388" height="368" alt="image" src="https://github.com/user-attachments/assets/de5fffba-2fd8-400b-8607-6fb548aec920" />
-
-
-### Examples
-```
-# Basic enumeration with known community
-./snmpcheck.pl -c public 192.168.70.150
-
-# SNMPv2c (faster, supports bulk operations)
-./snmpcheck.pl -c public -v 2c 192.168.70.150
-
-# Test write access
-./snmpcheck.pl -c public -w 192.168.70.150
-
-# Skip TCP enumeration (faster, less noisy)
-./snmpcheck.pl -c public -d 192.168.70.150
-
-# Slow/unreliable target — increase timeout and retries
-./snmpcheck.pl -c public -t 10 -r 3 192.168.70.150
-
-# Full scan with write check, SNMPv2c, no TCP
-./snmpcheck.pl -c public -v 2c -w -d -t 10 192.168.70.150
-
-# Save output to file
-./snmpcheck.pl -c public 192.168.70.150 | tee results.txt
-
-# Community string brute force (wrap in shell)
-for comm in public private manager admin monitor cisco; do
-    ./snmpcheck.pl -c "$comm" -t 2 -d 192.168.70.150 2>/dev/null \
-      | grep -q "Hostname" && echo "[HIT] $comm"
-done
+git clone https://github.com/r3vpwnx/snmpcheck.git
+cd snmpcheck
+chmod +x snmpcheck.pl
 ```
 
-### Disclaimer
-This tool is intended for authorized penetration testing and security assessments only. Use only against systems you have explicit written permission to test. The developer assumes no liability for misuse.
+## Usage
 
-### Credits
-Original tool: `snmpcheck.rb` by `Matteo Cantoni`
+```
+perl snmpcheck.pl [OPTIONS] <target IP>
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-p`, `--port` | SNMP UDP port | 161 |
+| `-c`, `--community` | Community string | public |
+| `-v`, `--version` | SNMP version (`1` or `2c`) | 1 |
+| `-w`, `--write` | Test for SNMP write access | off |
+| `-d`, `--disable-tcp` | Skip TCP enumeration | off |
+| `-t`, `--timeout` | Request timeout (seconds) | - |
+| `-r`, `--retries` | Retry count (0-10) | - |
+| `-h`, `--help` | Show help | - |
+
+Example:
+
+```
+./snmpcheck.pl -c public -d -t 10 -r 3 192.168.70.150
+```
+
+## References
+
+- Original tool: snmpcheck.rb by Matteo Cantoni - http://www.nothink.org/
+
+## Disclaimer
+
+For authorized security testing and education only. Query only devices you own or
+have explicit written permission to assess.
+
+## Author (Perl port)
+
+Dilanka Kaushal Hewage (r3vpwnx)
+- Site: https://r3vpwnx.space
+- Contact: dilankakaushalhewage@gmail.com
+
+## License
+
+GPL-3.0 - see [LICENSE](LICENSE).
